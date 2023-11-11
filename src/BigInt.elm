@@ -1,6 +1,6 @@
 module BigInt exposing
     ( BigInt
-    , fromInt, fromIntString, fromHexString, toString, toHexString
+    , fromInt, fromIntString, toString
     , add, sub, mul, div, modBy, divmod, pow
     , abs, negate
     , compare, gt, gte, lt, lte, max, min
@@ -39,8 +39,7 @@ module BigInt exposing
 -}
 
 import Basics
-import Constants exposing (hexDigitMagnitude, maxDigitMagnitude, maxDigitValue)
-import Hex
+import Constants exposing (maxDigitMagnitude, maxDigitValue)
 import List.Extra
 import Maybe exposing (Maybe)
 import Maybe.Extra
@@ -53,11 +52,6 @@ type Sign
     = Positive
     | Negative
     | Zero
-
-
-eightHexDigits : BigInt
-eightHexDigits =
-    mul (fromInt 2) (fromInt 0x80000000)
 
 
 signProduct : Sign -> Sign -> Sign
@@ -204,58 +198,6 @@ fromIntString x =
                 |> Maybe.map (mkBigInt Positive)
 
 
-{-| Makes a BigInt from a base16 hex string, positive or negative.
-
-    fromHexString "4b6" == Just (BigInt.Pos ...)
-    fromHexString "-13d" == Just (BigInt.Neg ...)
-
-    fromHexString "0x456" == Just (BigInt.Pos ...)
-    fromHexString "-0x123" == Just (BigInt.Neg ...)
-
-    fromHexString "R2D2" == Nothing
-    fromHexString "0xC3P0" == Nothing
-    fromHexString "0x" == Nothing
-    fromHexString "" == Nothing
-
-**Note:** String can be prepended with or without any combination of "0x", and "+" or "-".
-
--}
-fromHexString : String -> Maybe BigInt
-fromHexString x =
-    case String.toList (String.toLower x) of
-        [] ->
-            Nothing
-
-        '-' :: '0' :: 'x' :: [] ->
-            Nothing
-
-        '-' :: '0' :: 'x' :: xs ->
-            fromHexString_ xs
-                |> Maybe.map (mul (fromInt -1))
-
-        '-' :: [] ->
-            Nothing
-
-        '-' :: xs ->
-            fromHexString_ xs
-                |> Maybe.map (mul (fromInt -1))
-
-        '+' :: [] ->
-            Nothing
-
-        '+' :: xs ->
-            fromHexString_ xs
-
-        '0' :: 'x' :: [] ->
-            Nothing
-
-        '0' :: 'x' :: xs ->
-            fromHexString_ xs
-
-        xs ->
-            fromHexString_ xs
-
-
 {-| Split a number string into chunks of `maxDigitMagnitude` from smallest digits.
 Turn those into integers and store as a Magnitude.
 -}
@@ -268,23 +210,6 @@ fromString_ x =
                 |> List.map (List.reverse >> String.fromList >> String.toInt)
                 |> Maybe.Extra.combine
                 |> Maybe.map (emptyZero << Magnitude)
-
-        False ->
-            Nothing
-
-
-fromHexString_ : List Char -> Maybe BigInt
-fromHexString_ x =
-    case Regex.contains (Maybe.withDefault Regex.never (Regex.fromString "^[0-9A-Fa-f]")) <| String.fromList x of
-        True ->
-            List.reverse x
-                |> List.Extra.greedyGroupsOf hexDigitMagnitude
-                |> List.map (List.reverse >> String.fromList >> Hex.fromString >> Result.toMaybe)
-                |> Maybe.Extra.combine
-                |> Maybe.map
-                    (List.reverse
-                        >> List.foldl (\e s -> mul s eightHexDigits |> add (fromInt e)) zero
-                    )
 
         False ->
             Nothing
@@ -551,72 +476,6 @@ revMagnitudeToString (Magnitude digits) =
 
         x :: xs ->
             String.concat <| String.fromInt x :: List.map fillZeroes xs
-
-
-{-| Convert the BigInt to a hex string.
-
-    toHexString (BigInt.fromInt 255) == "ff"
-
-**Note:** "0x" will NOT be prepended to the output.
-
--}
-toHexString : BigInt -> String
-toHexString bigInt =
-    case bigInt of
-        Zer ->
-            "0"
-
-        Pos mag ->
-            if mag == Magnitude [] then
-                "0"
-
-            else
-                hexMagnitudeToString (Pos mag)
-
-        Neg mag ->
-            "-" ++ toHexString (mul (fromInt -1) bigInt)
-
-
-
--- Shortcut conversion to int for hex handling
-
-
-bigIntToInt_ : BigInt -> Int
-bigIntToInt_ bigInt =
-    case bigInt of
-        Zer ->
-            0
-
-        Pos (Magnitude [ a ]) ->
-            a
-
-        Pos (Magnitude [ a, b ]) ->
-            b * (10 ^ maxDigitMagnitude) + a
-
-        _ ->
-            -- Note: In Elm 0.18, this last case was `Debug.crash "No suitable shortcut conversion in hexMagnitudeToString"`
-            -- Using "impossible default value" instead. Should be impossible if this internal function is used correctly.
-            -- Fuzz testing is very helpful.
-            42
-
-
-hexMagnitudeToString : BigInt -> String
-hexMagnitudeToString bigInt =
-    case divmod bigInt eightHexDigits of
-        Nothing ->
-            -- Another "impossible default value" instead of Debug.crash
-            "Failure converting BigInt to hex string. Should be impossible. Open up issue on the elm-bigint repo."
-
-        Just ( d, r ) ->
-            let
-                rString =
-                    Hex.toString (bigIntToInt_ r)
-            in
-            if d == fromInt 0 then
-                rString
-
-            else
-                hexMagnitudeToString d ++ String.padLeft 8 '0' rString
 
 
 {-| BigInt division. Produces 0 when dividing by 0 (like (//)).

@@ -1,6 +1,5 @@
 module Constants exposing
-    ( hexDigitMagnitude
-    , maxDigitMagnitude
+    ( maxDigitMagnitude
     , maxDigitValue
     )
 
@@ -18,8 +17,3 @@ maxDigitValue =
 maxDigitMagnitude : Int
 maxDigitMagnitude =
     7
-
-
-hexDigitMagnitude : Int
-hexDigitMagnitude =
-    8

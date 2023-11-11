@@ -4,7 +4,6 @@ import BigInt exposing (..)
 import Constants exposing (maxDigitValue)
 import Expect
 import Fuzz exposing (Fuzzer, int, intRange, pair)
-import Hex
 import Random
 import String
 import Test exposing (..)
@@ -111,32 +110,6 @@ fromTests =
                         BigInt.fromInt 10000001
                 in
                 Expect.equal fromString (Just fromInt)
-        , test "fromHexString 0x2386f26fc10000 = mul (fromInt 100000000) (fromInt 100000000)" <|
-            \_ ->
-                let
-                    fromString =
-                        BigInt.fromHexString "0x2386f26fc10000"
-
-                    midLargeInt =
-                        BigInt.fromInt 100000000
-
-                    fromInt =
-                        BigInt.mul midLargeInt midLargeInt
-                in
-                Expect.equal fromString (Just fromInt)
-        , test "fromHexString 2386f26fc10000 = mul (fromInt 100000000) (fromInt 100000000)" <|
-            \_ ->
-                let
-                    fromString =
-                        BigInt.fromHexString "2386f26fc10000"
-
-                    midLargeInt =
-                        BigInt.fromInt 100000000
-
-                    fromInt =
-                        BigInt.mul midLargeInt midLargeInt
-                in
-                Expect.equal fromString (Just fromInt)
         , test "fromString 0 = fromInt 0" <|
             \_ -> Expect.equal (BigInt.fromIntString "0") (Just <| BigInt.fromInt 0)
         , test "fromString \"\" = Nothing" <|
@@ -145,20 +118,6 @@ fromTests =
             \_ -> Expect.equal (BigInt.fromIntString "+") Nothing
         , test "fromString - = Nothing" <|
             \_ -> Expect.equal (BigInt.fromIntString "-") Nothing
-        , test "fromHexString 0x0 = fromInt 0" <|
-            \_ -> Expect.equal (BigInt.fromHexString "0x0") (Just <| BigInt.fromInt 0)
-        , test "fromHexString -0x0 = fromInt 0" <|
-            \_ -> Expect.equal (BigInt.fromHexString "-0x0") (Just <| BigInt.fromInt 0)
-        , test "fromHexString \"\" = Nothing" <|
-            \_ -> Expect.equal (BigInt.fromHexString "") Nothing
-        , test "fromHexString + = Nothing" <|
-            \_ -> Expect.equal (BigInt.fromHexString "+") Nothing
-        , test "fromHexString - = Nothing" <|
-            \_ -> Expect.equal (BigInt.fromHexString "-") Nothing
-        , test "fromHexString 0x = Nothing" <|
-            \_ -> Expect.equal (BigInt.fromHexString "0x") Nothing
-        , test "fromHexString --0x0 = Nothing" <|
-            \_ -> Expect.equal (BigInt.fromHexString "--0x0") Nothing
         , test "fromIntString --23 = Nothing" <|
             \_ -> Expect.equal (BigInt.fromIntString "--23") Nothing
         ]
@@ -169,11 +128,9 @@ roundRobinTests =
     let
         complexRoundRobin int_ =
             fromInt int_
-                |> toHexString
-                |> fromHexString
-                |> Maybe.andThen (toString >> fromIntString)
+                |> (toString >> fromIntString)
     in
-    describe "complex round robin: fromInt -> toHexString -> fromHexString -> toString -> fromString"
+    describe "complex round robin: fromInt -> toString -> fromString"
         [ fuzz maxIntRange "large int range" <|
             \x ->
                 complexRoundRobin x
@@ -312,25 +269,6 @@ stringTests =
                 String.cons '+' y
                     |> fromIntString
                     |> Expect.equal (fromIntString y)
-        , test "Basic toHexString" <|
-            \_ ->
-                let
-                    fromBase16String =
-                        BigInt.fromHexString "2386f26fc10000"
-
-                    midLargeInt =
-                        BigInt.fromInt 100000000
-
-                    fromInt =
-                        mul midLargeInt midLargeInt
-                in
-                Expect.equal
-                    (Maybe.map BigInt.toHexString fromBase16String)
-                    (Just "2386f26fc10000")
-        , fuzz smallPositiveIntegers "Same results as rtfeldman/elm-hex" <|
-            \x ->
-                BigInt.toHexString (fromInt x)
-                    |> Expect.equal (Hex.toString x)
         ]
 
 
