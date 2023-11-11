@@ -43,7 +43,6 @@ import Constants exposing (maxDigitMagnitude, maxDigitValue)
 import List.Extra
 import Maybe exposing (Maybe)
 import Maybe.Extra
-import Regex
 
 
 {-| The sign of the bigInt
@@ -183,36 +182,40 @@ fromIntString x =
             Nothing
 
         '-' :: xs ->
-            fromString_ xs
+            fromUnsignedString xs
                 |> Maybe.map (mkBigInt Negative)
 
         '+' :: [] ->
             Nothing
 
         '+' :: xs ->
-            fromString_ xs
+            fromUnsignedString xs
                 |> Maybe.map (mkBigInt Positive)
 
         xs ->
-            fromString_ xs
+            fromUnsignedString xs
                 |> Maybe.map (mkBigInt Positive)
 
 
 {-| Split a number string into chunks of `maxDigitMagnitude` from smallest digits.
 Turn those into integers and store as a Magnitude.
 -}
-fromString_ : List Char -> Maybe Magnitude
-fromString_ x =
-    case Regex.contains (Maybe.withDefault Regex.never (Regex.fromString "^[0-9]")) <| String.fromList x of
-        True ->
-            List.reverse x
-                |> List.Extra.greedyGroupsOf maxDigitMagnitude
-                |> List.map (List.reverse >> String.fromList >> String.toInt)
-                |> Maybe.Extra.combine
-                |> Maybe.map (emptyZero << Magnitude)
+fromUnsignedString : List Char -> Maybe Magnitude
+fromUnsignedString x =
+    List.reverse x
+        |> List.Extra.greedyGroupsOf maxDigitMagnitude
+        |> List.map (List.reverse >> String.fromList >> String.toInt >> Maybe.andThen nothingIfNegative)
+        |> Maybe.Extra.combine
+        |> Maybe.map (emptyZero << Magnitude)
 
-        False ->
-            Nothing
+
+nothingIfNegative : Int -> Maybe Int
+nothingIfNegative x =
+    if x < 0 then
+        Nothing
+
+    else
+        Just x
 
 
 emptyZero : Magnitude -> Magnitude
