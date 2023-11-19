@@ -39,129 +39,22 @@ module BigInt exposing
 -}
 
 import Basics
-import Constants exposing (maxDigitMagnitude, maxDigitValue)
-import List.Extra
 import Maybe exposing (Maybe)
-import Maybe.Extra
 
 
-{-| The sign of the bigInt
+{-| This variant of the BigInt module depends on the default integer type in environments where the
+Elm core libraries are based on the Pine kernel.
+Since integer arithmetic in Pine has no limits, we don't need to do any composition here.
 -}
-type Sign
-    = Positive
-    | Negative
-    | Zero
-
-
-signProduct : Sign -> Sign -> Sign
-signProduct x y =
-    if x == Zero || y == Zero then
-        Zero
-
-    else if x == y then
-        Positive
-
-    else
-        Negative
-
-
-signNegate : Sign -> Sign
-signNegate sign_ =
-    case sign_ of
-        Positive ->
-            Negative
-
-        Negative ->
-            Positive
-
-        Zero ->
-            Zero
-
-
-signFromInt : Int -> Sign
-signFromInt x =
-    case Basics.compare x 0 of
-        LT ->
-            Negative
-
-        GT ->
-            Positive
-
-        EQ ->
-            Zero
-
-
-
-{- From smallest to largest digit, all the digits are positive, no leading zeros -}
-
-
-{-| -}
-type BigInt
-    = Pos Magnitude
-    | Neg Magnitude
-    | Zer
-
-
-{-| A list of safe-size `Int`s. with smaller magnitudes closer to the head.
--}
-type Magnitude
-    = Magnitude (List Int)
-
-
-mkBigInt : Sign -> Magnitude -> BigInt
-mkBigInt s ((Magnitude digits) as mag) =
-    if List.isEmpty digits then
-        Zer
-
-    else
-        case s of
-            Zero ->
-                Zer
-
-            Positive ->
-                Pos mag
-
-            Negative ->
-                Neg mag
-
-
-type BigIntNotNormalised
-    = BigIntNotNormalised Sign MagnitudeNotNormalised
-
-
-type MagnitudeNotNormalised
-    = MagnitudeNotNormalised (List Int)
-
-
-mkBigIntNotNormalised : Sign -> List Int -> BigIntNotNormalised
-mkBigIntNotNormalised s digits =
-    BigIntNotNormalised s (MagnitudeNotNormalised digits)
-
-
-toDigits : BigInt -> List Int
-toDigits bigInt =
-    case bigInt of
-        Zer ->
-            []
-
-        Pos (Magnitude ds) ->
-            ds
-
-        Neg (Magnitude ds) ->
-            ds
-
-
-baseDigit : Int
-baseDigit =
-    maxDigitValue + 1
+type alias BigInt =
+    Int
 
 
 {-| Makes a BigInt from an Int
 -}
 fromInt : Int -> BigInt
 fromInt x =
-    BigIntNotNormalised (signFromInt x) (MagnitudeNotNormalised [ Basics.abs x ])
-        |> normalise
+    x
 
 
 {-| Makes a BigInt from an integer string, positive or negative
@@ -174,108 +67,28 @@ fromInt x =
 -}
 fromIntString : String -> Maybe BigInt
 fromIntString x =
-    case String.toList (String.toLower x) of
-        [] ->
-            Nothing
-
-        '-' :: [] ->
-            Nothing
-
-        '-' :: xs ->
-            fromUnsignedString xs
-                |> Maybe.map (mkBigInt Negative)
-
-        '+' :: [] ->
-            Nothing
-
-        '+' :: xs ->
-            fromUnsignedString xs
-                |> Maybe.map (mkBigInt Positive)
-
-        xs ->
-            fromUnsignedString xs
-                |> Maybe.map (mkBigInt Positive)
-
-
-{-| Split a number string into chunks of `maxDigitMagnitude` from smallest digits.
-Turn those into integers and store as a Magnitude.
--}
-fromUnsignedString : List Char -> Maybe Magnitude
-fromUnsignedString x =
-    List.reverse x
-        |> List.Extra.greedyGroupsOf maxDigitMagnitude
-        |> List.map (List.reverse >> String.fromList >> String.toInt >> Maybe.andThen nothingIfNegative)
-        |> Maybe.Extra.combine
-        |> Maybe.map (emptyZero << Magnitude)
-
-
-nothingIfNegative : Int -> Maybe Int
-nothingIfNegative x =
-    if x < 0 then
-        Nothing
-
-    else
-        Just x
-
-
-emptyZero : Magnitude -> Magnitude
-emptyZero (Magnitude xs) =
-    case List.Extra.dropWhile ((==) 0) xs of
-        [] ->
-            Magnitude []
-
-        _ ->
-            Magnitude xs
+    String.toInt x
 
 
 {-| Adds two BigInts
 -}
 add : BigInt -> BigInt -> BigInt
 add a b =
-    let
-        (BigIntNotNormalised _ ma) =
-            toPositiveSign a
-
-        (BigIntNotNormalised _ mb) =
-            toPositiveSign b
-
-        (MagnitudePair pairs) =
-            sameSizeNotNormalized ma mb
-
-        added =
-            List.map (\( a_, b_ ) -> a_ + b_) pairs
-    in
-    normalise <| BigIntNotNormalised Positive (MagnitudeNotNormalised added)
+    a + b
 
 
 {-| Changes the sign of an BigInt
 -}
 negate : BigInt -> BigInt
 negate bigInt =
-    case bigInt of
-        Zer ->
-            Zer
-
-        Pos mag ->
-            Neg mag
-
-        Neg mag ->
-            Pos mag
+    -bigInt
 
 
 {-| Absolute value
 -}
 abs : BigInt -> BigInt
 abs bigInt =
-    case bigInt of
-        Zer ->
-            Zer
-
-        Neg mag ->
-            Pos mag
-
-        i ->
-            i
+    Basics.abs bigInt
 
 
 {-| Substracts the second BigInt from the first
@@ -289,116 +102,14 @@ sub a b =
 -}
 mul : BigInt -> BigInt -> BigInt
 mul int1 int2 =
-    mkBigInt
-        (signProduct (sign int1) (sign int2))
-        (mulMagnitudes (magnitude int1) (magnitude int2))
-
-
-magnitude : BigInt -> Magnitude
-magnitude bigInt =
-    case bigInt of
-        Zer ->
-            Magnitude []
-
-        Pos mag ->
-            mag
-
-        Neg mag ->
-            mag
-
-
-mulMagnitudes : Magnitude -> Magnitude -> Magnitude
-mulMagnitudes (Magnitude mag1) (Magnitude mag2) =
-    case mag1 of
-        [] ->
-            Magnitude []
-
-        m :: [] ->
-            mulSingleDigit (Magnitude mag2) m
-
-        m :: mx ->
-            let
-                accum =
-                    mulSingleDigit (Magnitude mag2) m
-
-                (Magnitude rest) =
-                    mulMagnitudes (Magnitude mx) (Magnitude mag2)
-
-                bigInt =
-                    add
-                        (mkBigInt Positive accum)
-                        (mkBigInt Positive (Magnitude (0 :: rest)))
-            in
-            magnitude bigInt
-
-
-mulSingleDigit : Magnitude -> Int -> Magnitude
-mulSingleDigit (Magnitude xs) d =
-    xs
-        |> List.map ((*) d)
-        |> MagnitudeNotNormalised
-        |> normaliseMagnitude
+    int1 * int2
 
 
 {-| Compares two BigInts
 -}
 compare : BigInt -> BigInt -> Order
 compare int1 int2 =
-    case ( int1, int2 ) of
-        ( Pos (Magnitude mag1), Pos (Magnitude mag2) ) ->
-            compareMagnitude 0 0 mag1 mag2
-
-        ( Pos _, _ ) ->
-            GT
-
-        ( Neg (Magnitude mag1), Neg (Magnitude mag2) ) ->
-            compareMagnitude 0 0 mag1 mag2
-                |> orderNegate
-
-        ( Neg _, _ ) ->
-            LT
-
-        ( Zer, Pos _ ) ->
-            LT
-
-        ( Zer, Zer ) ->
-            EQ
-
-        ( Zer, Neg _ ) ->
-            GT
-
-
-compareMagnitude : Int -> Int -> List Int -> List Int -> Order
-compareMagnitude x y xs ys =
-    case ( xs, ys ) of
-        ( [], [] ) ->
-            Basics.compare x y
-
-        ( [], _ ) ->
-            LT
-
-        ( _, [] ) ->
-            GT
-
-        ( x_ :: xss, y_ :: yss ) ->
-            if x_ == y_ then
-                compareMagnitude x y xss yss
-
-            else
-                compareMagnitude x_ y_ xss yss
-
-
-orderNegate : Order -> Order
-orderNegate x =
-    case x of
-        LT ->
-            GT
-
-        EQ ->
-            EQ
-
-        GT ->
-            LT
+    Basics.compare int1 int2
 
 
 {-| Less than
@@ -455,30 +166,7 @@ min x y =
 -}
 toString : BigInt -> String
 toString bigInt =
-    case bigInt of
-        Zer ->
-            "0"
-
-        Pos mag ->
-            revMagnitudeToString mag
-
-        Neg mag ->
-            "-" ++ revMagnitudeToString mag
-
-
-fillZeroes : Int -> String
-fillZeroes =
-    String.padLeft maxDigitMagnitude '0' << String.fromInt
-
-
-revMagnitudeToString : Magnitude -> String
-revMagnitudeToString (Magnitude digits) =
-    case List.reverse digits of
-        [] ->
-            "0"
-
-        x :: xs ->
-            String.concat <| String.fromInt x :: List.map fillZeroes xs
+    String.fromInt bigInt
 
 
 {-| BigInt division. Produces 0 when dividing by 0 (like (//)).
@@ -511,19 +199,7 @@ square num =
 -}
 isEven : BigInt -> Bool
 isEven num =
-    let
-        even i =
-            Basics.modBy 2 i == 0
-    in
-    case num of
-        Zer ->
-            True
-
-        Pos (Magnitude mag) ->
-            even (List.head mag |> Maybe.withDefault 0)
-
-        Neg (Magnitude mag) ->
-            even (List.head mag |> Maybe.withDefault 0)
+    Basics.modBy 2 num == 0
 
 
 {-| Parity Check - Odd.
@@ -544,22 +220,20 @@ pow base exp =
 -}
 powHelp : BigInt -> BigInt -> BigInt -> BigInt
 powHelp work num exp =
-    case exp of
-        Zer ->
-            one
+    if exp == 0 then
+        one
 
-        Neg _ ->
-            Zer
+    else if exp < 0 then
+        0
 
-        Pos _ ->
-            if exp == one then
-                mul work num
+    else if exp == one then
+        mul work num
 
-            else if isEven exp then
-                powHelp work (square num) (div exp two)
+    else if isEven exp then
+        powHelp work (square num) (div exp two)
 
-            else
-                powHelp (mul num work) (square num) (div (sub exp one) two)
+    else
+        powHelp (mul num work) (square num) (div (sub exp one) two)
 
 
 {-| Division and modulus
@@ -571,97 +245,13 @@ divmod num den =
 
     else
         let
-            cand_l =
-                List.length (toDigits num) - List.length (toDigits den) + 1
-
-            ( d, m ) =
-                divMod_
-                    (Basics.max 0 cand_l)
-                    (abs num)
-                    (abs den)
+            quotient =
+                num // den
         in
         Just
-            ( mkBigInt (signProduct (sign num) (sign den)) (magnitude d)
-            , mkBigInt (sign num) (magnitude m)
+            ( quotient
+            , sub num (quotient * den)
             )
-
-
-divmodDigit : BigInt -> BigInt -> BigInt -> ( BigInt, BigInt )
-divmodDigit padding x y =
-    divmodDigit_ (2 ^ maxDigitBits) padding x y
-
-
-divmodDigit_ : Int -> BigInt -> BigInt -> BigInt -> ( BigInt, BigInt )
-divmodDigit_ to_test padding num den =
-    if to_test == 0 then
-        ( zero, num )
-
-    else
-        let
-            x =
-                fromInt to_test
-
-            candidate =
-                mul (mul x den) padding
-
-            ( newdiv, newmod ) =
-                if lte candidate num then
-                    ( mul x padding, sub num candidate )
-
-                else
-                    ( zero, num )
-
-            ( restdiv, restmod ) =
-                divmodDigit_ (to_test // 2) padding newmod den
-        in
-        ( add newdiv restdiv, restmod )
-
-
-divMod_ : Int -> BigInt -> BigInt -> ( BigInt, BigInt )
-divMod_ n num den =
-    if n == 0 then
-        divmodDigit (padDigits n) num den
-
-    else
-        let
-            ( cdiv, cmod ) =
-                divmodDigit (padDigits n) num den
-
-            ( rdiv, rmod ) =
-                divMod_ (n - 1) cmod den
-        in
-        ( add cdiv rdiv, rmod )
-
-
-maxDigitBits : Int
-maxDigitBits =
-    maxDigitValue
-        |> toFloat
-        |> logBase 2
-        |> ceiling
-
-
-padDigits : Int -> BigInt
-padDigits n =
-    repeatedly (mul (fromInt baseDigit)) one n
-
-
-repeatedly : (a -> a) -> a -> Int -> a
-repeatedly f x n =
-    List.foldl (always f) x (List.range 1 n)
-
-
-sign : BigInt -> Sign
-sign bigInt =
-    case bigInt of
-        Zer ->
-            Zero
-
-        Pos _ ->
-            Positive
-
-        Neg _ ->
-            Negative
 
 
 zero : BigInt
@@ -677,112 +267,3 @@ one =
 two : BigInt
 two =
     fromInt 2
-
-
-{-| We can perform operations more quickly if we don't worry about keeping things in final compressed form.
-This takes a messed up number and cleans it up.
--}
-normalise : BigIntNotNormalised -> BigInt
-normalise (BigIntNotNormalised s digits) =
-    let
-        (Magnitude normalisedMag) =
-            normaliseMagnitude digits
-    in
-    if isNegativeMagnitude normalisedMag then
-        normalise (mkBigIntNotNormalised (signNegate s) (reverseMagnitude normalisedMag))
-
-    else
-        mkBigInt s (Magnitude normalisedMag)
-
-
-normaliseMagnitude : MagnitudeNotNormalised -> Magnitude
-normaliseMagnitude (MagnitudeNotNormalised xs) =
-    Magnitude (xs |> normaliseDigitList 0 |> dropZeroes)
-
-
-normaliseDigitList : Int -> List Int -> List Int
-normaliseDigitList carry xs =
-    case xs of
-        [] ->
-            if carry > baseDigit then
-                normaliseDigitList 0 [ carry ]
-
-            else
-                [ carry ]
-
-        x :: xs_ ->
-            let
-                ( newCarry, x_ ) =
-                    normaliseDigit (x + carry)
-            in
-            x_ :: normaliseDigitList newCarry xs_
-
-
-normaliseDigit : Int -> ( Int, Int )
-normaliseDigit x =
-    if x < 0 then
-        normaliseDigit (x + baseDigit)
-            |> Tuple.mapFirst ((+) -1)
-
-    else
-        ( x // baseDigit, remainderBy baseDigit x )
-
-
-dropZeroes : List Int -> List Int
-dropZeroes =
-    List.Extra.dropWhileRight ((==) 0)
-
-
-toPositiveSign : BigInt -> BigIntNotNormalised
-toPositiveSign bigInt =
-    case bigInt of
-        Zer ->
-            mkBigIntNotNormalised Zero []
-
-        Neg (Magnitude digits) ->
-            mkBigIntNotNormalised Positive (reverseMagnitude digits)
-
-        Pos (Magnitude digits) ->
-            mkBigIntNotNormalised Positive digits
-
-
-isNegativeMagnitude : List Int -> Bool
-isNegativeMagnitude digits =
-    case List.Extra.last digits of
-        Nothing ->
-            False
-
-        Just x ->
-            x < 0
-
-
-reverseMagnitude : List Int -> List Int
-reverseMagnitude =
-    List.map Basics.negate
-
-
-{-| Magnitudes can be different sizes. This represents a pair of magnitudes with everything aligned.
--}
-type MagnitudePair
-    = MagnitudePair (List ( Int, Int ))
-
-
-sameSizeNotNormalized : MagnitudeNotNormalised -> MagnitudeNotNormalised -> MagnitudePair
-sameSizeNotNormalized (MagnitudeNotNormalised xs) (MagnitudeNotNormalised ys) =
-    MagnitudePair <| sameSizeRaw xs ys
-
-
-sameSizeRaw : List Int -> List Int -> List ( Int, Int )
-sameSizeRaw xs ys =
-    case ( xs, ys ) of
-        ( [], [] ) ->
-            []
-
-        ( x :: xs_, [] ) ->
-            ( x, 0 ) :: sameSizeRaw xs_ []
-
-        ( [], y :: ys_ ) ->
-            ( 0, y ) :: sameSizeRaw [] ys_
-
-        ( x :: xs_, y :: ys_ ) ->
-            ( x, y ) :: sameSizeRaw xs_ ys_

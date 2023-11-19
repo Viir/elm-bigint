@@ -1,7 +1,6 @@
 module BigIntTests exposing (absTests, addTests, compareTests, divmodTests, fromTests, integer, isEvenTests, isOddTests, maxTests, minTests, minusOne, mulTests, negateTests, nonZeroInteger, one, powTests, roundRobinTests, singleNonZeroInteger, smallInt, smallPositiveIntegers, stringTests, subTests, tinyInt, tinyPositiveInt, zero)
 
 import BigInt exposing (..)
-import Constants exposing (maxDigitValue)
 import Expect
 import Fuzz exposing (Fuzzer, int, intRange, pair)
 import Random
@@ -64,7 +63,7 @@ minusOne =
 
 smallInt : Fuzzer Int
 smallInt =
-    intRange (Basics.negate maxDigitValue) maxDigitValue
+    intRange (Basics.negate 0x000000FFFFFFFFFF) 0x000000FFFFFFFFFF
 
 
 tinyInt : Fuzzer Int
